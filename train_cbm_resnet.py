@@ -61,7 +61,6 @@ POSITIVE_HINT_STRINGS = {
     "vascular",
 }
 
-# Set device
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class ConceptDerm7ptDataset(Dataset):
@@ -86,12 +85,10 @@ class ConceptDerm7ptDataset(Dataset):
         
     def _merge_data(self):
         """Merge metadata with concept annotations"""
-        # Create image_id from clinic path for matching
         meta_copy = self.meta_df.copy()
         meta_copy['image_id'] = meta_copy['clinic'].apply(lambda x: os.path.basename(str(x)).lower())
         meta_copy = meta_copy.drop(columns=self.concept_columns, errors='ignore')
         
-        # Merge with concept data
         merged = meta_copy.merge(self.concept_df, on='image_id', how='inner')
         print(f"Merged {len(merged)} samples with concept annotations")
         
@@ -103,24 +100,20 @@ class ConceptDerm7ptDataset(Dataset):
     def __getitem__(self, idx):
         row = self.merged_data.iloc[idx]
         
-        # Get image path
         image_filename = row['image_id']
         
-        # Search for the image
         possible_paths = [
             os.path.join(self.img_root, image_filename),
             os.path.join(self.img_root, image_filename.replace('.jpg', '.png')),
             os.path.join(self.img_root, image_filename.replace('.png', '.jpg'))
         ]
         
-        # Search in subdirectories
         if not any(os.path.exists(p) for p in possible_paths):
             search_pattern = os.path.join(self.img_root, '**', image_filename)
             found_files = glob.glob(search_pattern, recursive=True)
             if found_files:
                 image_path = found_files[0]
             else:
-                # Try alternative extensions
                 base_name = os.path.splitext(image_filename)[0]
                 for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
                     search_pattern = os.path.join(self.img_root, '**', base_name + ext)
@@ -133,18 +126,14 @@ class ConceptDerm7ptDataset(Dataset):
         else:
             image_path = next(p for p in possible_paths if os.path.exists(p))
         
-        # Load image
         image = Image.open(image_path).convert('RGB')
         
-        # Apply transforms
         if self.transform:
             image = self.transform(image)
         
-        # Get diagnosis label
         diagnosis = row['diagnosis']
         label = self.class_to_idx[diagnosis]
         
-        # Get concept annotations (excluding image_id)
         concepts = torch.tensor([float(row[col]) for col in self.concept_columns], dtype=torch.float32)
 
         return image, label, concepts
@@ -291,7 +280,6 @@ def compute_concept_pos_weights(dataset: ConceptDerm7ptDataset) -> torch.Tensor:
     pos_counts_np = concept_frame.sum(axis=0).values.astype(float)
     pos_counts = torch.tensor(pos_counts_np, dtype=torch.float32)
     neg_counts = torch.tensor(total - pos_counts_np, dtype=torch.float32)
-    # Avoid division by zero: if a concept never appears, set a large weight
     pos_weight = torch.where(pos_counts > 0, neg_counts / pos_counts, torch.full_like(pos_counts, total))
     return pos_weight
 
@@ -459,7 +447,6 @@ def evaluate_cbm(cbm, test_loader, class_names):
             batch_size = images.size(0)
             total_samples += batch_size
 
-            # Mediation: toggle each concept
             for idx, name in enumerate(concept_names):
                 intervened_one = predicted_concepts.clone()
                 intervened_one[:, idx] = 1.0
@@ -473,7 +460,6 @@ def evaluate_cbm(cbm, test_loader, class_names):
                 delta_zero = torch.softmax(logits_zero, dim=1) - diagnosis_probs_batch
                 mediation_effect_sums[name]['set_to_zero'] += delta_zero.sum(dim=0).cpu().numpy()
 
-            # Failure analysis metadata
             batch_indices = list(range(sample_pointer, sample_pointer + batch_size))
             image_ids = [
                 test_loader.dataset.merged_data.iloc[i]['image_id']
@@ -510,7 +496,6 @@ def evaluate_cbm(cbm, test_loader, class_names):
                         'concept_errors': concept_errors,
                     })
 
-    # Convert to numpy arrays
     concept_probs = torch.cat(concept_prob_batches, dim=0).numpy()
     concept_preds = torch.cat(concept_pred_batches, dim=0).numpy()
     concept_targets = torch.cat(concept_target_batches, dim=0).numpy()
@@ -518,7 +503,6 @@ def evaluate_cbm(cbm, test_loader, class_names):
     diagnosis_preds = torch.cat(diagnosis_pred_batches, dim=0).numpy()
     diagnosis_targets = torch.cat(diagnosis_target_batches, dim=0).numpy()
 
-    # Prediction distribution
     print("\n" + "=" * 60)
     print("PREDICTION DISTRIBUTION ANALYSIS")
     print("=" * 60)
@@ -539,7 +523,6 @@ def evaluate_cbm(cbm, test_loader, class_names):
     elif unique_predictions < max(1, int(len(class_names) * 0.3)):
         print("⚠️  WARNING: Model has limited prediction diversity")
 
-    # Confidence analysis
     max_probs = np.max(diagnosis_probs, axis=1) if len(diagnosis_probs) else np.array([])
     avg_confidence = float(np.mean(max_probs)) if len(max_probs) else 0.0
     print(f"\nAverage prediction confidence: {avg_confidence:.4f}")
@@ -548,7 +531,6 @@ def evaluate_cbm(cbm, test_loader, class_names):
     elif avg_confidence < 0.4:
         print("⚠️  Very low confidence - model may be uncertain")
 
-    # Aggregate metrics
     concept_accuracy = accuracy_score(concept_targets.flatten(), concept_preds.flatten())
     concept_precision, concept_recall, concept_f1, _ = precision_recall_fscore_support(
         concept_targets.flatten(), concept_preds.flatten(), average='binary', zero_division=0
@@ -572,7 +554,6 @@ def evaluate_cbm(cbm, test_loader, class_names):
     print(f"Diagnosis Recall: {diagnosis_recall:.4f}")
     print(f"Diagnosis F1: {diagnosis_f1:.4f}")
 
-    # Concept-level metrics
     per_concept_metrics = {}
     concept_calibration = {}
     print(f"\nCONCEPT-LEVEL PERFORMANCE")
@@ -609,7 +590,6 @@ def evaluate_cbm(cbm, test_loader, class_names):
             f" Brier {brier:.4f}, ECE {ece:.4f}"
         )
 
-    # Mediation summary (average delta per sample)
     mediation_summary = {}
     print(f"\nMEDIATION ANALYSIS (avg Δprobability)")
     for name in concept_names:
@@ -635,7 +615,6 @@ def evaluate_cbm(cbm, test_loader, class_names):
                 f" force=0 -> {top_zero[0]} Δ{top_zero[1]:+.4f}"
             )
 
-    # Failure analysis output
     total_failures = int(np.sum(diagnosis_preds != diagnosis_targets))
     failures_to_show = failures[:5]
     if failures_to_show:

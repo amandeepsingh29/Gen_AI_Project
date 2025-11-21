@@ -52,14 +52,12 @@ def generate_with_fallback(prompt: str):
     }
 
 
-# ---------- Health check ----------
 
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'healthy', 'service': 'Gemini Consultation Backend'})
 
 
-# ---------- OPTIONAL: keep your generic /chat endpoint ----------
 
 @app.route('/chat', methods=['POST'])
 def chat():

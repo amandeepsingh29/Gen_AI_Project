@@ -9,7 +9,6 @@ import json
 import glob
 import os
 
-# Set device
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class DirectResNetClassifier(nn.Module):
@@ -40,14 +39,12 @@ class DirectResNetClassifier(nn.Module):
 def load_direct_resnet_model():
     """Load the pre-trained ResNet for direct diagnosis"""
     try:
-        # Load the ResNet results to get class information
         with open("results/resnet18_derm7pt_results.json", "r") as f:
             resnet_results = json.load(f)
         
         class_names = resnet_results['class_names']
         num_classes = len(class_names)
         
-        # Create and load the model
         model = DirectResNetClassifier("results/resnet18_derm7pt.pt", num_classes)
         model = model.to(DEVICE)
         model.eval()
@@ -113,10 +110,8 @@ def test_resnet_on_sample_images():
         print("Failed to load model. Make sure you have trained the ResNet model first.")
         return
     
-    # Load some test images
     meta = pd.read_csv("dataset/meta/meta.csv")
     
-    # Get a few random samples
     sample_indices = np.random.choice(len(meta), min(5, len(meta)), replace=False)
     
     print(f"\n{'='*80}")
@@ -128,7 +123,6 @@ def test_resnet_on_sample_images():
         image_filename = os.path.basename(row['clinic']).lower()
         true_diagnosis = row['diagnosis']
         
-        # Find the image
         possible_paths = [
             os.path.join('dataset/images', image_filename),
             os.path.join('dataset/images', image_filename.replace('.jpg', '.png')),
@@ -142,7 +136,6 @@ def test_resnet_on_sample_images():
                 break
         
         if not image_path:
-            # Try searching in subdirectories
             search_pattern = os.path.join('dataset/images', '**', image_filename)
             found_files = glob.glob(search_pattern, recursive=True)
             if found_files:

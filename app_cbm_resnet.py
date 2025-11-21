@@ -20,25 +20,21 @@ except ImportError:
     GEMINI_AVAILABLE = False
     genai = None
 except Exception as e:
-    # Handle other import errors (e.g., version incompatibility)
     print(f"Gemini import warning: {e}")
     GEMINI_AVAILABLE = False
     genai = None
 
-# Backend configuration
 CHAT_BACKEND_URL = "http://localhost:5000"
-USE_BACKEND = True  # Set to True to use Flask backend instead of direct genai
+USE_BACKEND = True
 
 from train_cbm_resnet import PretrainedConceptPredictor, DiagnosisPredictor, ConceptBottleneckModel
 
-# Set page config
 st.set_page_config(
     page_title="Enhanced CBM Skin Cancer Diagnosis",
     page_icon="🔬",
     layout="wide"
 )
 
-# Define concept names for visualization
 CONCEPT_NAMES = [
     "Pigment Network",
     "Blue-Whitish Veil", 
@@ -49,7 +45,6 @@ CONCEPT_NAMES = [
     "Regression Structures"
 ]
 
-# Initialize Gemini
 def init_gemini_chat():
     """Initialize Gemini chat model with API key from environment or user input"""
     
@@ -95,7 +90,6 @@ def create_diagnosis_context(explanation, resnet_result=None):
     """Create a formatted context string from diagnosis results for Gemini"""
     context_parts = []
     
-    # CBM Results
     if explanation:
         context_parts.append("=== CBM (Concept Bottleneck Model) Analysis ===")
         context_parts.append(f"Predicted Diagnosis: {explanation.get('diagnosis', 'Unknown')}")
@@ -108,10 +102,9 @@ def create_diagnosis_context(explanation, resnet_result=None):
             context_parts.append(f"- {concept_name}: {concept_value:.3f} ({level} activation)")
         
         context_parts.append("\n--- Concept Influences ---")
-        for inf in explanation.get('concept_influences', [])[:5]:  # Top 5
+        for inf in explanation.get('concept_influences', [])[:5]:
             context_parts.append(f"- {inf['concept_name']}: influence {inf['probability_influence']:.4f}")
     
-    # ResNet Results
     if resnet_result:
         context_parts.append("\n=== Direct ResNet Analysis ===")
         context_parts.append(f"Predicted Diagnosis: {resnet_result.get('predicted_diagnosis', 'Unknown')}")
@@ -291,9 +284,7 @@ def generate_diagnosis_report(cbm_explanation, resnet_result, image, model_used)
 def chat_with_doctor_bot(model, diagnosis_context, user_message, chat_history):
     """Send message to Gemini and get response"""
     try:
-        # Check if using backend
         if model == "backend":
-            # Route through Flask backend
             full_prompt = f"""You are Dr. Bot, an AI dermatology assistant helping to interpret skin lesion diagnoses. You have access to the following analysis results from AI models:
 
 {diagnosis_context}
@@ -325,7 +316,6 @@ Dr. Bot Response:"""
                 return f"❌ Chat backend error: {error_detail}"
                 
         else:
-            # Use direct genai model
             full_prompt = f"""You are Dr. Bot, an AI dermatology assistant helping to interpret skin lesion diagnoses. You have access to the following analysis results from AI models:
 
 {diagnosis_context}
@@ -410,29 +400,23 @@ def load_cbm_model():
 def load_direct_resnet_model():
     """Load the direct ResNet model for comparison"""
     try:
-        # Load the ResNet results to get class information
         with open("results/resnet18_derm7pt_results.json", "r") as f:
             resnet_results = json.load(f)
         
         class_names = resnet_results['class_names']
         num_classes = len(class_names)
         
-        # Create ResNet model using the same architecture as training
         from train_resnet_derm7pt import ResNetClassifier
         model = ResNetClassifier(model_name='resnet18', num_classes=num_classes, pretrained=False)
         
-        # Load trained weights
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        # Load the state dict with flexible key mapping
         try:
             state_dict = torch.load("results/resnet18_derm7pt.pt", map_location=device, weights_only=True)
         except TypeError:
             state_dict = torch.load("results/resnet18_derm7pt.pt", map_location=device)
         
-        # Handle different checkpoint formats
         if 'classifier.weight' in state_dict and 'backbone.fc.weight' not in state_dict:
-            # Old format: rename classifier -> backbone.fc
             state_dict['backbone.fc.weight'] = state_dict.pop('classifier.weight')
             state_dict['backbone.fc.bias'] = state_dict.pop('classifier.bias')
         
@@ -501,25 +485,19 @@ def generate_concept_visualizations(cbm, img, input_tensor, device):
     with torch.no_grad():
         cbm.eval()
         
-        # Get concept predictions first
         concept_probs = cbm.concept_predictor(input_tensor)
         
-        # Hook to capture feature maps from the backbone
         activation = {}
         def get_activation(name):
             def hook(model, input, output):
                 activation[name] = output.detach()
             return hook
         
-        # Register hook to capture the last convolutional features before global avg pooling
         hook_handle = None
         
-        # Try to find the layer4 output in the ResNet backbone
         try:
-            # Access the backbone through the feature extractor
             for name, module in cbm.concept_predictor.feature_extractor.named_modules():
                 if 'layer4' in name and isinstance(module, torch.nn.Sequential):
-                    # Hook the entire layer4 block
                     hook_handle = module.register_forward_hook(get_activation('layer4_features'))
                     print(f"Hooked layer4 block")
                     break
@@ -530,18 +508,14 @@ def generate_concept_visualizations(cbm, img, input_tensor, device):
         except:
             pass
         
-        # If we couldn't hook layer4 specifically, try the entire feature extractor
         if hook_handle is None:
-            # Get the second-to-last layer (before AdaptiveAvgPool2d)
             layers = list(cbm.concept_predictor.feature_extractor.children())
             if len(layers) >= 2:
                 hook_handle = layers[-2].register_forward_hook(get_activation('layer4_features'))
                 print("Hooked second-to-last layer of feature extractor")
         
-        # Forward pass to capture feature maps
         _ = cbm.concept_predictor(input_tensor)
         
-        # Remove hook
         if hook_handle:
             hook_handle.remove()
         
@@ -551,12 +525,10 @@ def generate_concept_visualizations(cbm, img, input_tensor, device):
             feature_maps = activation['layer4_features']
             print(f"Captured feature maps shape: {feature_maps.shape}")
             
-            # Ensure we have the right shape [B, C, H, W]
             if len(feature_maps.shape) == 4:
-                feature_maps = feature_maps[0]  # Remove batch dimension: [C, H, W]
+                feature_maps = feature_maps[0]
             else:
                 print(f"Unexpected feature map shape: {feature_maps.shape}")
-                # Create fallback visualizations
                 for concept_idx in range(concept_probs.shape[1]):
                     concept_visualizations.append({
                         'concept_idx': concept_idx,
@@ -569,44 +541,33 @@ def generate_concept_visualizations(cbm, img, input_tensor, device):
                     })
                 return concept_visualizations
             
-            # Get concept layer weights (raw_weight with softplus applied)
-            raw_weights = cbm.concept_predictor.raw_weight.data  # [num_concepts, feature_dim]
-            concept_weights = torch.nn.functional.softplus(raw_weights)  # Apply softplus to get actual weights
+            raw_weights = cbm.concept_predictor.raw_weight.data
+            concept_weights = torch.nn.functional.softplus(raw_weights)
             
-            # For ResNet18, after layer4 we should have [512, 7, 7] feature maps
             C, H, W = feature_maps.shape
             print(f"Feature maps: C={C}, H={H}, W={W}")
             print(f"Concept weights shape: {concept_weights.shape}")
             
-            # Generate CAM for each concept
             for concept_idx in range(concept_probs.shape[1]):
                 try:
-                    # Get weights for this concept
-                    weights = concept_weights[concept_idx]  # [512] for ResNet18
+                    weights = concept_weights[concept_idx]
                     
-                    # Ensure weights match feature map channels
                     if weights.shape[0] != C:
                         print(f"Warning: Weight dimension {weights.shape[0]} doesn't match feature channels {C}")
-                        # Use average pooling as fallback
-                        concept_cam = torch.mean(feature_maps, dim=0)  # [H, W]
+                        concept_cam = torch.mean(feature_maps, dim=0)
                     else:
-                        # Compute weighted feature map
-                        weights_expanded = weights.view(C, 1, 1)  # [C, 1, 1]
-                        weighted_features = weights_expanded * feature_maps  # [C, H, W]
-                        concept_cam = torch.sum(weighted_features, dim=0)  # [H, W]
+                        weights_expanded = weights.view(C, 1, 1)
+                        weighted_features = weights_expanded * feature_maps
+                        concept_cam = torch.sum(weighted_features, dim=0)
                     
-                    # Apply ReLU to focus on positive activations
                     concept_cam = torch.clamp(concept_cam, min=0)
                     
-                    # Convert to numpy for processing
                     concept_cam_np = concept_cam.cpu().numpy()
                     
-                    # Check for invalid values
                     if np.isnan(concept_cam_np).any() or np.isinf(concept_cam_np).any():
                         print(f"Warning: Invalid values in CAM for concept {concept_idx}")
                         concept_cam_np = np.zeros_like(concept_cam_np)
                     
-                    # Normalize CAM
                     cam_min = concept_cam_np.min()
                     cam_max = concept_cam_np.max()
                     
@@ -615,34 +576,26 @@ def generate_concept_visualizations(cbm, img, input_tensor, device):
                     else:
                         concept_cam_normalized = np.zeros_like(concept_cam_np)
                     
-                    # Store original statistics
                     original_max = float(cam_max)
                     original_mean = float(concept_cam_np.mean())
                     
-                    # Resize CAM to image size
                     concept_cam_resized = cv2.resize(concept_cam_normalized, (img.width, img.height))
                     
-                    # Create heatmap
                     heatmap = cv2.applyColorMap(np.uint8(255 * concept_cam_resized), cv2.COLORMAP_JET)
                     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
                     
-                    # Create blended image (heatmap overlay)
                     alpha = 0.6
                     blended = (1 - alpha) * img_np + alpha * heatmap
                     blended = np.clip(blended, 0, 255).astype(np.uint8)
                     
-                    # Create focus map
                     threshold = 0.3
                     important_regions = concept_cam_resized > threshold
                     
-                    # Create dimmed version
                     dimmed_img = img_np.copy().astype(float) * 0.2
                     focus_img = dimmed_img.copy()
                     
-                    # Restore original intensity in important regions
                     focus_img[important_regions] = img_np[important_regions]
                     
-                    # Add red border around important regions
                     if np.any(important_regions):
                         kernel = np.ones((2, 2), np.uint8)
                         dilated_mask = cv2.dilate(important_regions.astype(np.uint8), kernel, iterations=1)
@@ -663,7 +616,6 @@ def generate_concept_visualizations(cbm, img, input_tensor, device):
                     
                 except Exception as e:
                     print(f"Error processing concept {concept_idx}: {e}")
-                    # Create safe fallback
                     concept_visualizations.append({
                         'concept_idx': concept_idx,
                         'concept_name': CONCEPT_NAMES[concept_idx] if concept_idx < len(CONCEPT_NAMES) else f"Concept {concept_idx}",
@@ -676,34 +628,27 @@ def generate_concept_visualizations(cbm, img, input_tensor, device):
         
         else:
             print("Could not capture feature maps, creating fallback visualizations")
-            # Create simple fallback visualizations based on concept activations
             for concept_idx in range(concept_probs.shape[1]):
                 concept_activation = concept_probs[0, concept_idx].item()
                 
-                # Create a simple radial gradient based on concept activation
                 h, w = img.height, img.width
                 center_y, center_x = h // 2, w // 2
                 
                 y, x = np.ogrid[:h, :w]
-                # FIX: Change from *2 to **2 for proper distance calculation
                 distance_from_center = np.sqrt((x - center_x)**2 + (y - center_y)**2)
                 max_distance = np.sqrt(center_x**2 + center_y**2)
                 normalized_distance = distance_from_center / max_distance
                 
-                # Create activation map
                 activation_map = concept_activation * (1 - normalized_distance * 0.5)
                 activation_map = np.clip(activation_map, 0, 1)
                 
-                # Create heatmap
                 heatmap = cv2.applyColorMap(np.uint8(255 * activation_map), cv2.COLORMAP_JET)
                 heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
                 
-                # Blend with original
                 alpha = 0.4
                 blended = (1 - alpha) * img_np + alpha * heatmap
                 blended = np.clip(blended, 0, 255).astype(np.uint8)
                 
-                # Create focus map
                 threshold = 0.5 * concept_activation
                 important_regions = activation_map > threshold
                 
@@ -756,20 +701,16 @@ def plot_concept_influence(explanation):
     influences = [inf["probability_influence"] for inf in explanation["concept_influences"]]
     concept_values = [inf["concept_value"] for inf in explanation["concept_influences"]]
     
-    # Sort by absolute influence
     sort_idx = np.argsort(np.abs(influences))[::-1]
     sorted_names = [concept_names[i] for i in sort_idx]
     sorted_influences = [influences[i] for i in sort_idx]
     sorted_values = [concept_values[i] for i in sort_idx]
     
-    # Create figure
     fig, ax = plt.subplots(figsize=(10, 6))
     
-    # Plot influences
     bars = ax.barh(sorted_names, sorted_influences, 
                   color=['red' if i < 0 else 'green' for i in sorted_influences])
     
-    # Add concept values as text
     for i, (bar, value) in enumerate(zip(bars, sorted_values)):
         ax.text(0.01, bar.get_y() + bar.get_height()/2, f"Act: {value:.2f}", 
                va='center', fontsize=9, color='white', weight='bold')
@@ -817,10 +758,8 @@ def plot_concept_predictions(explanation):
                     for i in range(len(explanation["predicted_concepts"]))]
     concept_values = explanation["predicted_concepts"]
     
-    # Create figure
     fig, ax = plt.subplots(figsize=(12, 8))
     
-    # Create color map based on activation level
     colors = []
     for val in concept_values:
         if val >= 0.7:
@@ -832,25 +771,20 @@ def plot_concept_predictions(explanation):
         else:
             colors.append('#CD5C5C')  # Light red for low activation
     
-    # Create horizontal bar chart
     bars = ax.barh(concept_names, concept_values, color=colors, alpha=0.7)
     
-    # Add value labels on bars
     for i, (bar, value) in enumerate(zip(bars, concept_values)):
         ax.text(value + 0.01, bar.get_y() + bar.get_height()/2, f'{value:.3f}', 
                va='center', fontsize=10, fontweight='bold')
     
-    # Customize plot
     ax.set_xlabel('Concept Activation Level', fontsize=12, fontweight='bold')
     ax.set_title('All Concept Predictions for Uploaded Image', fontsize=14, fontweight='bold')
     ax.set_xlim(0, 1.1)
     ax.grid(True, axis='x', alpha=0.3)
     
-    # Add reference lines
     ax.axvline(x=0.5, color='gray', linestyle='--', alpha=0.5, label='Threshold (0.5)')
     ax.axvline(x=0.7, color='green', linestyle='--', alpha=0.5, label='High Activation (0.7)')
     
-    # Add legend
     legend_elements = [
         plt.Rectangle((0,0),1,1, facecolor='#2E8B57', alpha=0.7, label='High (≥0.7)'),
         plt.Rectangle((0,0),1,1, facecolor='#FFA500', alpha=0.7, label='Medium (0.5-0.7)'),

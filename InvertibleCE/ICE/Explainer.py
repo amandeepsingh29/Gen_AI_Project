@@ -17,9 +17,7 @@ import time
 
 
 FONT_SIZE = 30
-#CALC_LIMIT = 3e4
 CALC_LIMIT = 1e8
-#CALC_LIMIT = 1e9
 TRAIN_LIMIT = 50
 REDUCER_PATH = "reducer/resnet50"
 USE_TRAINED_REDUCER = False
@@ -47,7 +45,7 @@ class Explainer():
         self.useMean = useMean
         self.reducer_type = reducer_type
         self.featuretopk = featuretopk
-        self.featureimgtopk = featureimgtopk #number of images for a feature
+        self.featureimgtopk = featureimgtopk
         self.n_components = n_components
         self.epsilon = epsilon
         
@@ -132,8 +130,8 @@ class Explainer():
 
         err = []
         for i in range(len(self.class_names)):
-            res_true = model.feature_predict(X_features[i],layer_name=self.layer_name)[:,i] #
-            res_recon = model.feature_predict(reX[i],layer_name=self.layer_name)[:,i] #
+            res_true = model.feature_predict(X_features[i],layer_name=self.layer_name)[:,i]
+            res_recon = model.feature_predict(reX[i],layer_name=self.layer_name)[:,i]
             err.append(abs(res_true-res_recon).mean(axis=0) / (abs(res_true.mean(axis=0))+self.epsilon))
 
 
@@ -182,7 +180,6 @@ class Explainer():
         return
 
     def _feature_filter(self,featureMaps,threshold = None):
-    #filter feature map to feature value with threshold for target value
         if self.useMean:
             res = featureMaps.mean(axis = (1,2))
         else:
@@ -265,7 +262,6 @@ class Explainer():
                         
                     
             print ("Done with class: {}, {}/{}".format(self.class_names[i],i+1,len(loaders)))
-        # create repeat prototypes in case lack of samples
         for no,(x,h) in features.items():
             idx = h.mean(axis = (1,2)).argmax()
             for i in range(h.shape[0]):
@@ -279,7 +275,6 @@ class Explainer():
 
     def _save_features(self,threshold=0.5,background = 0.2,smooth = True):
         feature_path = self.exp_location / self.title / "feature_imgs"
-        #utils = self.utils
 
         if not os.path.exists(feature_path):
             os.mkdir(feature_path)
@@ -287,7 +282,6 @@ class Explainer():
         for idx in self.features.keys(): 
 
             x,h = self.features[idx]
-            #x = self.gen_masked_imgs(x,h,threshold=threshold,background = background,smooth = smooth)
             minmax = False
             if self.reducer_type == 'PCA':
                 minmax = True
@@ -329,7 +323,6 @@ class Explainer():
                 nodestr+="</tr>"
 
 
-                #nodestr +="<tr><td><FONT POINT-SIZE=\"{}\"> ClassName: {} </FONT></td></tr>".format(font,classes.No2Name[No])
                 nodestr +="<tr><td><FONT POINT-SIZE=\"{}\"> FeatureRank: {} </FONT></td></tr>".format(font,count)
 
                 nodestr +="<tr><td><FONT POINT-SIZE=\"{}\"> Feature: {}, Weight: {:.3f} </FONT></td></tr>".format(font,fidx,w)

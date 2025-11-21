@@ -18,7 +18,6 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix
 import numpy as np
 
-# Set device
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Derm7ptDataset(Dataset):
@@ -90,7 +89,6 @@ class ResNetClassifier(nn.Module):
     def __init__(self, model_name='resnet18', num_classes=5, pretrained=True):
         super(ResNetClassifier, self).__init__()
         
-        # Load pretrained ResNet
         if model_name == 'resnet18':
             self.backbone = models.resnet18(pretrained=pretrained)
             self.feature_dim = 512
@@ -103,7 +101,6 @@ class ResNetClassifier(nn.Module):
         else:
             raise ValueError(f"Unsupported model: {model_name}")
         
-        # Replace the final classification layer
         self.backbone.fc = nn.Linear(self.feature_dim, num_classes)
         
     def forward(self, x):
@@ -139,7 +136,6 @@ def plot_training_history(history, save_path="results/training_plots.png"):
     
     epochs = range(1, len(history['train_losses']) + 1)
     
-    # Plot training and validation loss
     axes[0, 0].plot(epochs, history['train_losses'], 'b-', label='Training Loss', linewidth=2)
     axes[0, 0].plot(epochs, history['val_losses'], 'r-', label='Validation Loss', linewidth=2)
     axes[0, 0].set_title('Training and Validation Loss', fontsize=14, fontweight='bold')
@@ -148,7 +144,6 @@ def plot_training_history(history, save_path="results/training_plots.png"):
     axes[0, 0].legend()
     axes[0, 0].grid(True, alpha=0.3)
     
-    # Plot training and validation accuracy
     axes[0, 1].plot(epochs, [acc * 100 for acc in history['train_accs']], 'b-', label='Training Accuracy', linewidth=2)
     axes[0, 1].plot(epochs, [acc * 100 for acc in history['val_accs']], 'r-', label='Validation Accuracy', linewidth=2)
     axes[0, 1].set_title('Training and Validation Accuracy', fontsize=14, fontweight='bold')
@@ -157,7 +152,6 @@ def plot_training_history(history, save_path="results/training_plots.png"):
     axes[0, 1].legend()
     axes[0, 1].grid(True, alpha=0.3)
     
-    # Plot learning rate (if available)
     if 'learning_rates' in history:
         axes[1, 0].plot(epochs, history['learning_rates'], 'g-', linewidth=2)
         axes[1, 0].set_title('Learning Rate Schedule', fontsize=14, fontweight='bold')
@@ -170,7 +164,6 @@ def plot_training_history(history, save_path="results/training_plots.png"):
                        ha='center', va='center', transform=axes[1, 0].transAxes, fontsize=12)
         axes[1, 0].set_title('Learning Rate Schedule', fontsize=14, fontweight='bold')
     
-    # Plot best metrics summary
     axes[1, 1].text(0.1, 0.8, f"Best Validation Accuracy: {history['best_val_acc']:.4f}", 
                    transform=axes[1, 1].transAxes, fontsize=12, fontweight='bold')
     axes[1, 1].text(0.1, 0.6, f"Final Training Loss: {history['train_losses'][-1]:.4f}", 
@@ -224,7 +217,6 @@ def plot_class_performance(y_true, y_pred, class_names, save_path="results/class
     
     precision, recall, f1, support = precision_recall_fscore_support(y_true, y_pred, average=None)
     
-    # Create DataFrame for easier plotting
     metrics_df = pd.DataFrame({
         'Class': class_names,
         'Precision': precision,
@@ -235,7 +227,6 @@ def plot_class_performance(y_true, y_pred, class_names, save_path="results/class
     
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
     
-    # Plot precision
     axes[0, 0].bar(range(len(class_names)), precision, color='skyblue', alpha=0.7)
     axes[0, 0].set_title('Precision by Class', fontsize=14, fontweight='bold')
     axes[0, 0].set_xlabel('Classes')
@@ -244,7 +235,6 @@ def plot_class_performance(y_true, y_pred, class_names, save_path="results/class
     axes[0, 0].set_xticklabels(class_names, rotation=45, ha='right')
     axes[0, 0].grid(True, alpha=0.3)
     
-    # Plot recall
     axes[0, 1].bar(range(len(class_names)), recall, color='lightcoral', alpha=0.7)
     axes[0, 1].set_title('Recall by Class', fontsize=14, fontweight='bold')
     axes[0, 1].set_xlabel('Classes')
@@ -253,7 +243,6 @@ def plot_class_performance(y_true, y_pred, class_names, save_path="results/class
     axes[0, 1].set_xticklabels(class_names, rotation=45, ha='right')
     axes[0, 1].grid(True, alpha=0.3)
     
-    # Plot F1-score
     axes[1, 0].bar(range(len(class_names)), f1, color='lightgreen', alpha=0.7)
     axes[1, 0].set_title('F1-Score by Class', fontsize=14, fontweight='bold')
     axes[1, 0].set_xlabel('Classes')
@@ -262,7 +251,6 @@ def plot_class_performance(y_true, y_pred, class_names, save_path="results/class
     axes[1, 0].set_xticklabels(class_names, rotation=45, ha='right')
     axes[1, 0].grid(True, alpha=0.3)
     
-    # Plot support (number of samples)
     axes[1, 1].bar(range(len(class_names)), support, color='gold', alpha=0.7)
     axes[1, 1].set_title('Support (Number of Samples) by Class', fontsize=14, fontweight='bold')
     axes[1, 1].set_xlabel('Classes')
@@ -377,12 +365,9 @@ def train_resnet_model(model, train_loader, val_loader, num_epochs=10, learning_
                       grad_clip=None):
     """Train ResNet model on Derm7pt dataset"""
     
-    # Loss function and optimizer
-    # Loss: support class weights and optional label smoothing / focal
     base_criterion = nn.CrossEntropyLoss(weight=class_weights.to(DEVICE)) if class_weights is not None else nn.CrossEntropyLoss()
 
     def smooth_labels(targets, num_classes, smoothing):
-        # returns smoothed one-hot targets
         with torch.no_grad():
             true_dist = torch.zeros((targets.size(0), num_classes), device=targets.device)
             true_dist.fill_(smoothing / (num_classes - 1))
@@ -390,14 +375,12 @@ def train_resnet_model(model, train_loader, val_loader, num_epochs=10, learning_
         return true_dist
 
     def focal_loss(inputs, targets_soft, gamma=2.0):
-        # inputs: logits, targets_soft: soft labels (one-hot or smoothed)
         probs = torch.softmax(inputs, dim=1)
         ce = - (targets_soft * torch.log(probs + 1e-9)).sum(dim=1)
         p_t = (probs * targets_soft).sum(dim=1)
         loss = ((1 - p_t) ** gamma) * ce
         return loss.mean()
     
-    # Use different learning rates for pretrained features vs classifier
     params_to_update = [
         {'params': [p for name, p in model.named_parameters() if 'fc' not in name], 'lr': learning_rate * 0.1},
         {'params': model.backbone.fc.parameters(), 'lr': learning_rate}
@@ -406,7 +389,6 @@ def train_resnet_model(model, train_loader, val_loader, num_epochs=10, learning_
     optimizer = optim.Adam(params_to_update, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5, verbose=True)
     
-    # Training tracking
     best_val_balanced_acc = -float('inf')
     best_val_acc = 0.0
     best_model_state = None
@@ -421,11 +403,9 @@ def train_resnet_model(model, train_loader, val_loader, num_epochs=10, learning_
     print("Starting training...")
     
     for epoch in range(num_epochs):
-        # Track learning rate
         current_lr = optimizer.param_groups[0]['lr']
         learning_rates.append(current_lr)
         
-        # Training phase
         model.train()
         running_loss = 0.0
         correct_predictions = 0
@@ -456,7 +436,6 @@ def train_resnet_model(model, train_loader, val_loader, num_epochs=10, learning_
                 else:
                     log_probs = torch.log_softmax(outputs, dim=1)
                     loss = - (targets * log_probs).sum(dim=1).mean()
-                # mixup creates soft targets, so predictions for stats use argmax of outputs
                 current_preds = torch.argmax(outputs, dim=1)
             else:
                 outputs = model(images)
@@ -482,13 +461,11 @@ def train_resnet_model(model, train_loader, val_loader, num_epochs=10, learning_
                 torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             optimizer.step()
             
-            # Statistics
             running_loss += loss.item()
             _, predicted = torch.max(outputs, 1)
             total_samples += labels.size(0)
             correct_predictions += (predicted == labels).sum().item()
             
-            # Update progress bar
             train_pbar.set_postfix({
                 'Loss': f'{loss.item():.4f}',
                 'Acc': f'{100 * correct_predictions / total_samples:.2f}%',
@@ -500,7 +477,6 @@ def train_resnet_model(model, train_loader, val_loader, num_epochs=10, learning_
         train_losses.append(train_loss)
         train_accs.append(train_acc)
         
-        # Validation phase
         model.eval()
         val_running_loss = 0.0
         val_correct = 0
@@ -515,7 +491,6 @@ def train_resnet_model(model, train_loader, val_loader, num_epochs=10, learning_
                 labels = labels.to(DEVICE)
                 
                 outputs = model(images)
-                # Compute validation loss using same configuration as training
                 if label_smoothing and label_smoothing > 0.0:
                     num_classes = outputs.size(1)
                     targets = smooth_labels(labels, num_classes, label_smoothing)
@@ -555,30 +530,25 @@ def train_resnet_model(model, train_loader, val_loader, num_epochs=10, learning_
         val_balanced_accs.append(val_balanced_acc)
         val_macro_f1s.append(val_macro_f1)
         
-        # Update learning rate scheduler
         scheduler.step(val_loss)
         
-        # Print epoch summary
         print(f"Epoch {epoch+1}/{num_epochs}:")
         print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}")
         print(f"  Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}, Val Balanced Acc: {val_balanced_acc:.4f}, Val Macro F1: {val_macro_f1:.4f}")
         print(f"  Learning Rate: {current_lr:.2e}")
         
-        # Save best model
         if val_balanced_acc > best_val_balanced_acc:
             best_val_balanced_acc = val_balanced_acc
             best_val_acc = val_acc
             best_model_state = model.state_dict().copy()
             print(f"  ⭐ New best validation balanced accuracy: {best_val_balanced_acc:.4f}")
     
-    # Save the best model
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     torch.save(best_model_state, save_path)
     print(f"\nBest model saved to {save_path}")
     print(f"Best validation balanced accuracy: {best_val_balanced_acc:.4f}")
     print(f"Corresponding validation accuracy: {best_val_acc:.4f}")
     
-    # Save training history
     history = {
         'train_losses': train_losses,
         'val_losses': val_losses,
@@ -595,7 +565,6 @@ def train_resnet_model(model, train_loader, val_loader, num_epochs=10, learning_
     with open(history_path, 'w') as f:
         json.dump(history, f, indent=2)
     
-    # Generate training plots
     plot_training_history(history, save_path.replace('.pt', '_training_plots.png'))
     
     return best_val_acc, history
@@ -622,30 +591,25 @@ def main():
     print(f"Using device: {DEVICE}")
     print(f"Training {args.model} for {args.epochs} epochs")
     
-    # Create results directory
     os.makedirs("results", exist_ok=True)
     
-    # Load metadata
     if not os.path.exists("dataset/meta/meta.csv"):
         raise FileNotFoundError("Could not find dataset/meta/meta.csv")
     
     meta = pd.read_csv("dataset/meta/meta.csv")
     print(f"Loaded metadata with {len(meta)} samples")
     
-    # Load or create data splits
     try:
         train_idx = pd.read_csv("dataset/meta/all.csv")["indexes"].tolist()
         val_idx = pd.read_csv("dataset/meta/valid_indexes.csv")["indexes"].tolist()
         test_idx = pd.read_csv("dataset/meta/test_indexes.csv")["indexes"].tolist()
         print("Loaded existing data splits")
         
-        # Validate indices are within bounds
         max_index = len(meta) - 1
         train_idx_valid = [idx for idx in train_idx if 0 <= idx <= max_index]
         val_idx_valid = [idx for idx in val_idx if 0 <= idx <= max_index]
         test_idx_valid = [idx for idx in test_idx if 0 <= idx <= max_index]
         
-        # Check if we lost any indices due to out-of-bounds
         if len(train_idx_valid) < len(train_idx):
             print(f"Warning: Removed {len(train_idx) - len(train_idx_valid)} out-of-bounds train indices")
         if len(val_idx_valid) < len(val_idx):
@@ -653,10 +617,8 @@ def main():
         if len(test_idx_valid) < len(test_idx):
             print(f"Warning: Removed {len(test_idx) - len(test_idx_valid)} out-of-bounds test indices")
         
-        # Use the valid indices
         train_idx, val_idx, test_idx = train_idx_valid, val_idx_valid, test_idx_valid
         
-        # If too many indices were invalid, create new splits
         if len(train_idx) < 100 or len(val_idx) < 20 or len(test_idx) < 20:
             print("Too many invalid indices, creating new data splits...")
             train_idx, val_idx, test_idx = create_data_splits(meta)
@@ -669,7 +631,6 @@ def main():
         print("Creating new data splits...")
         train_idx, val_idx, test_idx = create_data_splits(meta)
     
-    # Create data splits
     try:
         train_meta = meta.iloc[train_idx].reset_index(drop=True)
         val_meta = meta.iloc[val_idx].reset_index(drop=True)
@@ -684,7 +645,6 @@ def main():
     
     print(f"Data splits - Train: {len(train_meta)}, Val: {len(val_meta)}, Test: {len(test_meta)}")
     
-    # Define transforms
     train_transform = transforms.Compose([
         transforms.Resize((args.img_size, args.img_size)),
         transforms.RandomHorizontalFlip(p=0.5),
@@ -701,12 +661,10 @@ def main():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
     
-    # Create datasets
     train_dataset = Derm7ptDataset(train_meta, 'dataset/images', transform=train_transform)
     val_dataset = Derm7ptDataset(val_meta, 'dataset/images', transform=val_test_transform)
     test_dataset = Derm7ptDataset(test_meta, 'dataset/images', transform=val_test_transform)
 
-    # Compute class weights for sampling and loss balancing
     class_weights = torch.ones(len(train_dataset.diagnosis_classes), dtype=torch.float32)
     sample_weights = torch.ones(len(train_meta), dtype=torch.double)
     if len(train_meta) > 0:
@@ -717,7 +675,7 @@ def main():
             count = float(class_counts.get(class_name, 0.0))
             if count > 0.0:
                 raw_weight = total_count / (num_classes * count)
-                adjusted_weight = raw_weight ** 0.5  # soften imbalance correction
+                adjusted_weight = raw_weight ** 0.5
                 class_weights[idx] = float(torch.clamp(torch.tensor(adjusted_weight), 0.25, 4.0))
             else:
                 class_weights[idx] = 0.0
@@ -733,7 +691,6 @@ def main():
 
     train_sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
     
-    # Create data loaders
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -747,7 +704,6 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, 
                             num_workers=args.num_workers, pin_memory=True)
     
-    # Create model
     num_classes = len(train_dataset.diagnosis_classes)
     model = ResNetClassifier(model_name=args.model, num_classes=num_classes, pretrained=True)
     model = model.to(DEVICE)
@@ -755,9 +711,7 @@ def main():
     print(f"Model: {args.model} with {num_classes} classes")
     print(f"Classes: {train_dataset.diagnosis_classes}")
     
-    # Train model
     save_path = f"results/{args.model}_derm7pt.pt"
-    # Optionally unfreeze backbone for stronger fine-tuning
     if args.unfreeze_backbone:
         for param in model.backbone.parameters():
             param.requires_grad = True
@@ -776,15 +730,12 @@ def main():
         grad_clip=args.grad_clip
     )
     
-    # Load best model for evaluation
     model.load_state_dict(torch.load(save_path))
     
-    # Comprehensive test evaluation with visualizations
     comprehensive_results = comprehensive_test_evaluation(
         model, test_loader, train_dataset.diagnosis_classes, save_dir="results"
     )
     
-    # Save final results (including comprehensive test results)
     results = {
         'model_name': args.model,
         'num_classes': num_classes,
