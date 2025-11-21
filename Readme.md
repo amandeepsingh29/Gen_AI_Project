@@ -206,12 +206,3 @@ The UI is designed for clinicians, not ML engineers. It allows users to: :conten
   - Ask follow-up questions about concepts or evidence.
 
 ---
-
-## How to Run
-
-> **Prerequisites:** Python 3.8 and a working virtual environment are recommended.
-
-1. **Install dependencies**
-
-   ```bash
-   pip install -r requirements.txt
